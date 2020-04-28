@@ -5,7 +5,8 @@ use std::convert::TryInto;
 
 pub struct BranchAndBound<'a> {
     pub spending_target: u64,
-    pub available_utxos: Vec<&'a TxOut>,
+    pub mandatory_utxos: Vec<&'a TxOut>,
+    pub optional_utxos: Vec<&'a TxOut>,
     pub addressees_num: u64,
     pub estimated_fees: u64,
     pub size_of_header: u64,
@@ -21,37 +22,40 @@ pub enum Error {
 
 impl<'a> BranchAndBound<'a> {
     pub fn select_coins(mut self) -> Result<Vec<&'a TxOut>, Error> {
-        self.available_utxos.sort_by(|a, b| b.value.cmp(&a.value));
-        let mut selected_coins = Vec::new();
-        let result = self.branch_and_bound(0, &mut selected_coins, 0);
+        self.optional_utxos.sort_by(|a, b| b.value.cmp(&a.value));
+        let mut selected_utxos = self.mandatory_utxos.clone();
+        let sum_mandatory = self.mandatory_utxos.iter().fold(0, |sum, i| sum + i.value);
+        let result = self.branch_and_bound(0, &mut selected_utxos, sum_mandatory);
 
         if result {
-            Ok(selected_coins)
+            Ok(selected_utxos)
         } else {
             // If no match, Single Random Draw
-            self.single_random_draw()
+            self.single_random_draw(sum_mandatory)
         }
     }
 
-    fn single_random_draw(mut self) -> Result<Vec<&'a TxOut>, Error> {
-        thread_rng().shuffle(&mut self.available_utxos);
-        let mut sum = 0;
+    fn single_random_draw(mut self, sum_mandatory: u64) -> Result<Vec<&'a TxOut>, Error> {
+        thread_rng().shuffle(&mut self.optional_utxos);
+        let mut sum = sum_mandatory;
 
         let mut target = self.spending_target + self.output_cost() + self.header_cost();
 
         let cost_per_input = self.input_cost(1);
-        let selected_coins = self
-            .available_utxos
+        let mut selected_utxos: Vec<&TxOut> = self
+            .optional_utxos
             .into_iter()
-           .take_while(|x| {
+            .take_while(|x| {
                 sum += x.value;
                 target += cost_per_input;
                 sum - x.value < target
             })
             .collect();
 
+        selected_utxos.append(&mut self.mandatory_utxos);
+
         if sum >= target {
-            Ok(selected_coins)
+            Ok(selected_utxos)
         } else {
             Err(Error::InsufficientFunds)
         }
@@ -76,15 +80,15 @@ impl<'a> BranchAndBound<'a> {
             return true;
         }
 
-        if self.tries <= 0 || depth >= self.available_utxos.len() {
+        if self.tries <= 0 || depth >= self.optional_utxos.len() {
             return false;
         }
 
         self.tries = self.tries - 1;
 
         // Exploring omission and inclusion branch
-       let current_utxo_value = self.available_utxos[depth].value;
-        current_selection.push(self.available_utxos[depth]);
+        let current_utxo_value = self.optional_utxos[depth].value;
+        current_selection.push(self.optional_utxos[depth]);
 
         if self.branch_and_bound(
             depth + 1,
