@@ -1,12 +1,15 @@
-use bitcoin::blockdata::transaction::TxOut;
+use bitcoin::blockdata::transaction::OutPoint;
 
 use rand::{thread_rng, Rng};
 use std::convert::TryInto;
 
-pub struct BranchAndBound<'a> {
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct OutPointValue(pub OutPoint, pub u64);
+
+pub struct BranchAndBound {
     pub spending_target: u64,
-    pub mandatory_utxos: Vec<&'a TxOut>,
-    pub optional_utxos: Vec<&'a TxOut>,
+    pub mandatory_utxos: Vec<OutPointValue>,
+    pub optional_utxos: Vec<OutPointValue>,
     pub addressees_num: u64,
     pub estimated_fees: u64,
     pub size_of_header: u64,
@@ -20,11 +23,11 @@ pub enum Error {
     InsufficientFunds,
 }
 
-impl<'a> BranchAndBound<'a> {
-    pub fn select_coins(mut self) -> Result<Vec<&'a TxOut>, Error> {
-        self.optional_utxos.sort_by(|a, b| b.value.cmp(&a.value));
+impl BranchAndBound {
+    pub fn select_coins(mut self) -> Result<Vec<OutPointValue>, Error> {
+        self.optional_utxos.sort_by(|a, b| b.1.cmp(&a.1));
         let mut selected_utxos = self.mandatory_utxos.clone();
-        let sum_mandatory = self.mandatory_utxos.iter().fold(0, |sum, i| sum + i.value);
+        let sum_mandatory = self.mandatory_utxos.iter().fold(0, |sum, i| sum + i.1);
         let result = self.branch_and_bound(0, &mut selected_utxos, sum_mandatory);
 
         if result {
@@ -35,20 +38,20 @@ impl<'a> BranchAndBound<'a> {
         }
     }
 
-    fn single_random_draw(mut self, sum_mandatory: u64) -> Result<Vec<&'a TxOut>, Error> {
+    fn single_random_draw(mut self, sum_mandatory: u64) -> Result<Vec<OutPointValue>, Error> {
         thread_rng().shuffle(&mut self.optional_utxos);
         let mut sum = sum_mandatory;
 
         let mut target = self.spending_target + self.output_cost() + self.header_cost();
 
         let cost_per_input = self.input_cost(1);
-        let mut selected_utxos: Vec<&TxOut> = self
+        let mut selected_utxos: Vec<OutPointValue> = self
             .optional_utxos
             .into_iter()
             .take_while(|x| {
-                sum += x.value;
+                sum += x.1;
                 target += cost_per_input;
-                sum - x.value < target
+                sum - x.1 < target
             })
             .collect();
 
@@ -64,7 +67,7 @@ impl<'a> BranchAndBound<'a> {
     fn branch_and_bound(
         &mut self,
         depth: usize,
-        current_selection: &mut Vec<&'a TxOut>,
+        current_selection: &mut Vec<OutPointValue>,
         effective_value: u64,
     ) -> bool {
         let input_cost = self.input_cost(current_selection.len().try_into().unwrap());
@@ -87,7 +90,7 @@ impl<'a> BranchAndBound<'a> {
         self.tries = self.tries - 1;
 
         // Exploring omission and inclusion branch
-        let current_utxo_value = self.optional_utxos[depth].value;
+        let current_utxo_value = self.optional_utxos[depth].1;
         current_selection.push(self.optional_utxos[depth]);
 
         if self.branch_and_bound(

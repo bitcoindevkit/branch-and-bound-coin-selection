@@ -10,4 +10,4 @@ edition = "2018"
 rand = "0.3"
 
 [dependencies.bitcoin]
-version = "0.21"
+version = "0.23"

@@ -3,38 +3,42 @@ pub mod branch_and_bound;
 #[cfg(test)]
 mod test {
 
-    use crate::branch_and_bound::BranchAndBound;
-    use bitcoin::blockdata::script::Script;
-    use bitcoin::blockdata::transaction::TxOut;
+    use crate::branch_and_bound::{BranchAndBound, OutPointValue};
+    use bitcoin::blockdata::transaction::OutPoint;
+    use bitcoin::hashes::sha256d::Hash;
+    use bitcoin::Txid;
     use rand::{thread_rng, Rng, SeedableRng, StdRng};
 
-    fn generate_random_utxos(rng: &mut StdRng, utxos_number: i32) -> Vec<TxOut> {
+    fn generate_random_utxos(rng: &mut StdRng, utxos_number: i32) -> Vec<OutPointValue> {
         let mut optional_utxos = Vec::new();
         for _i in 0..utxos_number {
-            optional_utxos.push(TxOut {
-                value: rng.gen_range(0, 2000),
-                script_pubkey: Script::new(),
-            });
+            optional_utxos.push(OutPointValue(
+                OutPoint {
+                    txid: Txid::from(Hash::default()),
+                    vout: 0,
+                },
+                rng.gen_range(0, 2000),
+            ));
         }
         optional_utxos
     }
 
-    fn sum_random_utxos<'a>(rng: &mut StdRng, optional_utxos: &mut Vec<&'a TxOut>) -> u64 {
+    fn sum_random_utxos(rng: &mut StdRng, optional_utxos: &mut Vec<OutPointValue>) -> u64 {
         let utxos_picked_len = rng.gen_range(2, optional_utxos.len() / 2);
         thread_rng().shuffle(optional_utxos);
         optional_utxos[..utxos_picked_len]
             .iter()
-            .fold(0, |acc, x| acc + x.value)
+            .fold(0, |acc, x| acc + x.1)
     }
 
     #[test]
     fn test_exact_match() {
-        // Exact matches are always found when tries < 2^len(utxos)
+        // Exact matches, if they exist,
+        // are always found when tries < 2^len(utxos)
         let seed: &[_] = &[1, 2, 3, 4];
         let mut rng: StdRng = SeedableRng::from_seed(seed);
         for _i in 0..200 {
-            let optional_utxos = generate_random_utxos(&mut rng, 30);
-            let mut optional_utxos = optional_utxos.iter().collect();
+            let mut optional_utxos = generate_random_utxos(&mut rng, 30);
             let mandatory_utxos = Vec::new();
             let sum_utxos_picked = sum_random_utxos(&mut rng, &mut optional_utxos);
             let b = BranchAndBound {
@@ -52,7 +56,7 @@ mod test {
                 b.select_coins()
                     .unwrap()
                     .into_iter()
-                    .fold(0, |acc, x| acc + x.value),
+                    .fold(0, |acc, x| acc + x.1),
                 sum_utxos_picked
             );
         }
@@ -63,8 +67,7 @@ mod test {
         let seed: &[_] = &[1, 2, 3, 4];
         let mut rng: StdRng = SeedableRng::from_seed(seed);
         for _i in 0..200 {
-            let optional_utxos = generate_random_utxos(&mut rng, 1000);
-            let mut optional_utxos = optional_utxos.iter().collect();
+            let mut optional_utxos = generate_random_utxos(&mut rng, 1000);
             let mandatory_utxos = Vec::new();
             let spending_target = sum_random_utxos(&mut rng, &mut optional_utxos);
             let addressees_num = 3;
@@ -89,7 +92,7 @@ mod test {
                     * (addressees_num * size_per_output
                         + (selected_coins.len() as u64) * size_per_input
                         + size_of_header);
-            assert!(selected_coins.into_iter().fold(0, |acc, x| acc + x.value) >= target);
+            assert!(selected_coins.into_iter().fold(0, |acc, x| acc + x.1) >= target);
         }
     }
 
@@ -100,10 +103,10 @@ mod test {
         let mut rng: StdRng = SeedableRng::from_seed(seed);
         let optional_utxos = generate_random_utxos(&mut rng, 5);
         let mandatory_utxos = Vec::new();
-        let sum_utxos_picked = optional_utxos.iter().fold(0, |acc, x| acc + x.value);
+        let sum_utxos_picked = optional_utxos.iter().fold(0, |acc, x| acc + x.1);
         let b = BranchAndBound {
             spending_target: sum_utxos_picked,
-            optional_utxos: optional_utxos.iter().collect(),
+            optional_utxos: optional_utxos,
             mandatory_utxos,
             addressees_num: rng.gen_range(1, 100),
             estimated_fees: rng.gen_range(1, 200),
@@ -118,14 +121,13 @@ mod test {
 
     #[test]
     fn test_mandatory() {
-        // Exact matches are always found when tries < 2^len(utxos)
+        // Exact matches, if they exist,
+        // are always found when tries < 2^len(utxos)
         let seed: &[_] = &[1, 2, 3, 4];
         let mut rng: StdRng = SeedableRng::from_seed(seed);
         for _i in 0..200 {
-            let optional_utxos = generate_random_utxos(&mut rng, 30);
-            let mut optional_utxos = optional_utxos.iter().collect();
+            let mut optional_utxos = generate_random_utxos(&mut rng, 30);
             let mandatory_utxos = generate_random_utxos(&mut rng, 3);
-            let mandatory_utxos: Vec<&TxOut> = mandatory_utxos.iter().collect();
             let sum_utxos_picked = sum_random_utxos(&mut rng, &mut optional_utxos);
             let b = BranchAndBound {
                 spending_target: sum_utxos_picked,
@@ -144,7 +146,7 @@ mod test {
                 assert!(utxos_selected.contains(&utxo));
             }
 
-            assert!(utxos_selected.into_iter().fold(0, |acc, x| acc + x.value) >= sum_utxos_picked);
+            assert!(utxos_selected.into_iter().fold(0, |acc, x| acc + x.1) >= sum_utxos_picked);
         }
     }
 }
