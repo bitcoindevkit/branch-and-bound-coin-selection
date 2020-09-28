@@ -7,14 +7,28 @@ use std::convert::TryInto;
 pub struct OutPointValue(pub OutPoint, pub u64);
 
 pub struct BranchAndBound {
+    /// The spending target to be reached. Note that this variable should hold only the sum of the
+    /// outputs, and not the fees: those will be calculated using `addresses_num`,
+    /// `estimated_fee_rate`, `size_of_header`, `size_per_output`, `size_per_input`.
     pub spending_target: u64,
+    /// Utxos in this vector will be always included in the result.
+    /// Useful for RBF.
     pub mandatory_utxos: Vec<OutPointValue>,
+    /// Utxos that could be included in the result, if mandatory_utxos
+    /// are not enough.
     pub optional_utxos: Vec<OutPointValue>,
+    /// How many output the transaction has. Used for estimating fees.
     pub addressees_num: u64,
-    pub estimated_fees: u64,
+    /// Estimated fee rate, in sat/vbyte
+    pub estimated_fee_rate: u64,
+    /// Size of the transaction header. Used for estimating fees.
     pub size_of_header: u64,
+    /// Size of each transaction output. Used for estimating fees.
     pub size_per_output: u64,
+    /// Size of each transaction input. Used for estimating fees.
     pub size_per_input: u64,
+    /// How many times should the algorithm try to find an exact match, before answering with a
+    /// suboptimal result.
     pub tries: u64,
 }
 
@@ -24,6 +38,13 @@ pub enum Error {
 }
 
 impl BranchAndBound {
+    /// Selects coins such that their sum is equal to or greater than the spending target, returns an
+    /// Error if utxos are insufficient for reaching the spending target.
+    /// It will return an exact match, if found before `self.tries` tries, otherwise a suboptimal
+    /// result will be given.
+    /// The suboptimal solution is obtained including all `self.mandatory_utxos`, and then
+    /// picking randomly from `self.optional_utxos`, until the spending
+    /// target is reached.
     pub fn select_coins(mut self) -> Result<Vec<OutPointValue>, Error> {
         self.optional_utxos.sort_by(|a, b| b.1.cmp(&a.1));
         let mut selected_utxos = self.mandatory_utxos.clone();
@@ -45,6 +66,7 @@ impl BranchAndBound {
         let mut target = self.spending_target + self.output_cost() + self.header_cost();
 
         let cost_per_input = self.input_cost(1);
+        // TODO: is take_while the cleanest method here?
         let mut selected_utxos: Vec<OutPointValue> = self
             .optional_utxos
             .into_iter()
@@ -107,14 +129,14 @@ impl BranchAndBound {
     }
 
     fn input_cost(&self, input_num: u64) -> u64 {
-        self.size_per_input * self.estimated_fees * input_num
+        self.size_per_input * self.estimated_fee_rate * input_num
     }
 
     fn output_cost(&self) -> u64 {
-        self.addressees_num * self.size_per_output * self.estimated_fees
+        self.addressees_num * self.size_per_output * self.estimated_fee_rate
     }
 
     fn header_cost(&self) -> u64 {
-        self.size_of_header * self.estimated_fees
+        self.size_of_header * self.estimated_fee_rate
     }
 }

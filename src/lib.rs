@@ -46,7 +46,7 @@ mod test {
                 optional_utxos,
                 mandatory_utxos,
                 addressees_num: 1,
-                estimated_fees: 0,
+                estimated_fee_rate: 0,
                 size_of_header: 0,
                 size_per_output: 0,
                 size_per_input: 0,
@@ -71,7 +71,7 @@ mod test {
             let mandatory_utxos = Vec::new();
             let spending_target = sum_random_utxos(&mut rng, &mut optional_utxos);
             let addressees_num = 3;
-            let estimated_fees = 20;
+            let estimated_fee_rate = 20;
             let size_of_header = 10;
             let size_per_output = 10;
             let size_per_input = 5;
@@ -80,7 +80,7 @@ mod test {
                 optional_utxos,
                 mandatory_utxos,
                 addressees_num,
-                estimated_fees,
+                estimated_fee_rate,
                 size_of_header,
                 size_per_output,
                 size_per_input,
@@ -88,7 +88,7 @@ mod test {
             };
             let selected_coins = b.select_coins().unwrap();
             let target = spending_target
-                + estimated_fees
+                + estimated_fee_rate
                     * (addressees_num * size_per_output
                         + (selected_coins.len() as u64) * size_per_input
                         + size_of_header);
@@ -109,7 +109,7 @@ mod test {
             optional_utxos: optional_utxos,
             mandatory_utxos,
             addressees_num: rng.gen_range(1, 100),
-            estimated_fees: rng.gen_range(1, 200),
+            estimated_fee_rate: rng.gen_range(1, 200),
             size_of_header: rng.gen_range(1, 200),
             size_per_output: rng.gen_range(1, 200),
             size_per_input: rng.gen_range(1, 200),
@@ -134,7 +134,7 @@ mod test {
                 optional_utxos,
                 mandatory_utxos: mandatory_utxos.clone(),
                 addressees_num: 1,
-                estimated_fees: 0,
+                estimated_fee_rate: 0,
                 size_of_header: 0,
                 size_per_output: 0,
                 size_per_input: 0,

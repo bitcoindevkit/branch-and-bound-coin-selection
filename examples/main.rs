@@ -48,7 +48,7 @@ fn main() {
         mandatory_utxos: mandatory_utxos,
         optional_utxos: optional_utxos,
         addressees_num: 1,
-        estimated_fees: 0,
+        estimated_fee_rate: 0,
         size_of_header: 0,
         size_per_output: 0,
         size_per_input: 0,
