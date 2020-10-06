@@ -7,7 +7,9 @@ mod test {
     use bitcoin::blockdata::transaction::OutPoint;
     use bitcoin::hashes::sha256d::Hash;
     use bitcoin::Txid;
-    use rand::{thread_rng, Rng, SeedableRng, StdRng};
+    use rand::rngs::StdRng;
+    use rand::seq::SliceRandom;
+    use rand::{thread_rng, Rng, SeedableRng};
 
     fn generate_random_utxos(rng: &mut StdRng, utxos_number: i32) -> Vec<OutPointValue> {
         let mut optional_utxos = Vec::new();
@@ -25,7 +27,7 @@ mod test {
 
     fn sum_random_utxos(rng: &mut StdRng, optional_utxos: &mut Vec<OutPointValue>) -> u64 {
         let utxos_picked_len = rng.gen_range(2, optional_utxos.len() / 2);
-        thread_rng().shuffle(optional_utxos);
+        optional_utxos.shuffle(&mut thread_rng());
         optional_utxos[..utxos_picked_len]
             .iter()
             .fold(0, |acc, x| acc + x.1)
@@ -35,7 +37,7 @@ mod test {
     fn test_exact_match() {
         // Exact matches, if they exist,
         // are always found when tries < 2^len(utxos)
-        let seed: &[_] = &[1, 2, 3, 4];
+        let seed = [0; 32];
         let mut rng: StdRng = SeedableRng::from_seed(seed);
         for _i in 0..200 {
             let mut optional_utxos = generate_random_utxos(&mut rng, 30);
@@ -64,7 +66,7 @@ mod test {
 
     #[test]
     fn test_maybe_exact_match() {
-        let seed: &[_] = &[1, 2, 3, 4];
+        let seed = [0; 32];
         let mut rng: StdRng = SeedableRng::from_seed(seed);
         for _i in 0..200 {
             let mut optional_utxos = generate_random_utxos(&mut rng, 1000);
@@ -99,7 +101,7 @@ mod test {
     #[test]
     #[should_panic]
     fn test_insufficient_funds() {
-        let seed: &[_] = &[1, 2, 3, 4];
+        let seed = [0; 32];
         let mut rng: StdRng = SeedableRng::from_seed(seed);
         let optional_utxos = generate_random_utxos(&mut rng, 5);
         let mandatory_utxos = Vec::new();
@@ -123,7 +125,7 @@ mod test {
     fn test_mandatory() {
         // Exact matches, if they exist,
         // are always found when tries < 2^len(utxos)
-        let seed: &[_] = &[1, 2, 3, 4];
+        let seed = [0; 32];
         let mut rng: StdRng = SeedableRng::from_seed(seed);
         for _i in 0..200 {
             let mut optional_utxos = generate_random_utxos(&mut rng, 30);

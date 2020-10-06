@@ -1,6 +1,7 @@
 use bitcoin::blockdata::transaction::OutPoint;
 
-use rand::{thread_rng, Rng};
+use rand::seq::SliceRandom;
+use rand::thread_rng;
 use std::convert::TryInto;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -60,7 +61,7 @@ impl BranchAndBound {
     }
 
     fn single_random_draw(mut self, sum_mandatory: u64) -> Result<Vec<OutPointValue>, Error> {
-        thread_rng().shuffle(&mut self.optional_utxos);
+        self.optional_utxos.shuffle(&mut thread_rng());
         let mut sum = sum_mandatory;
 
         let mut target = self.spending_target + self.output_cost() + self.header_cost();
